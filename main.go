@@ -28,10 +28,6 @@ const (
 	errSaveInRepository  = iota
 )
 
-var (
-	commands = []command.Command{command.MkDir, command.CopyFile}
-)
-
 func main() {
 	home, err := os.UserHomeDir()
 	if err != nil {
@@ -54,6 +50,7 @@ func main() {
 
 	paths := path.LookFor(canonPath, mime.ImageType, mime.ApplicationOctetStreamType)
 	total := len(paths)
+	directories := map[string]bool{}
 
 	for index, source := range paths {
 		checksum, err := md5.CalculateMD5Checksum(source)
@@ -90,11 +87,20 @@ func main() {
 			continue
 		}
 
+		var commands []command.Command
+		output, _ := filepath.Split(destination)
+		if _, exist := directories[output]; !exist {
+			commands = append(commands, command.MkDir)
+		}
+		commands = append(commands, command.CopyFile)
+
 		if err := command.NewExecutor(source, destination).Execute(commands...); err != nil {
 			message := fmt.Sprintf("[error ] %s (%d of %d)", filename, index+1, total)
 			fmt.Println(message)
 			continue
 		}
+
+		directories[output] = true
 
 		p.Filename = filename
 		p.Checksum = checksum
