@@ -53,18 +53,9 @@ func main() {
 	directories := map[string]bool{}
 
 	for index, source := range paths {
-		checksum, err := md5.CalculateMD5Checksum(source)
-		if err != nil {
-			log.Print(err)
-			os.Exit(errMD5Checksum)
-		}
-
 		_, filename := filepath.Split(source)
-		p, err := repository.Get(filename, checksum)
-		if err != nil {
-			log.Print(err)
-			os.Exit(errGetFromRepository)
-		}
+		checksum := calculateMD5Checksum(source)
+		p := getFromRepository(filename, checksum, repository)
 
 		if p.ID != 0 {
 			message := fmt.Sprintf("[skipped] %s (%d of %d)", filename, index+1, total)
@@ -87,29 +78,63 @@ func main() {
 			continue
 		}
 
-		var commands []command.Command
-		output, _ := filepath.Split(destination)
-		if _, exist := directories[output]; !exist {
-			commands = append(commands, command.MkDir)
-		}
-		commands = append(commands, command.CopyFile)
-
-		if err := command.NewExecutor(source, destination).Execute(commands...); err != nil {
+		if err := copyFile(source, destination, directories); err != nil {
 			message := fmt.Sprintf("[error ] %s (%d of %d)", filename, index+1, total)
 			fmt.Println(message)
 			continue
 		}
 
-		directories[output] = true
-
 		p.Filename = filename
 		p.Checksum = checksum
-		if err := repository.Save(&p); err != nil {
-			log.Print(err)
-			os.Exit(errSaveInRepository)
-		}
+		saveInRepository(p, repository)
 
 		message := fmt.Sprintf("[success] %s (%d of %d)", filename, index+1, total)
 		fmt.Println(message)
 	}
+}
+
+func calculateMD5Checksum(source string) string {
+	checksum, err := md5.CalculateMD5Checksum(source)
+	if err != nil {
+		log.Print(err)
+		os.Exit(errMD5Checksum)
+	}
+
+	return checksum
+}
+
+func getFromRepository(filename, checksum string, repository photo.Repository) photo.Photo {
+	p, err := repository.Get(filename, checksum)
+	if err != nil {
+		log.Print(err)
+		os.Exit(errGetFromRepository)
+	}
+
+	return p
+}
+
+func saveInRepository(p photo.Photo, repository photo.Repository) {
+	if err := repository.Save(&p); err != nil {
+		log.Print(err)
+		os.Exit(errSaveInRepository)
+	}
+}
+
+func copyFile(source, destination string, directories map[string]bool) error {
+	output, _ := filepath.Split(destination)
+	commands := createCommands(output, directories)
+	if err := command.NewExecutor(source, destination).Execute(commands...); err != nil {
+		return err
+	}
+	directories[output] = true
+	return nil
+}
+
+func createCommands(output string, directories map[string]bool) []command.Command {
+	var commands []command.Command
+	if _, exist := directories[output]; !exist {
+		commands = append(commands, command.MkDir)
+	}
+	commands = append(commands, command.CopyFile)
+	return commands
 }
