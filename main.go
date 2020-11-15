@@ -10,16 +10,19 @@ import (
 	"github.com/alancesar/tidy-file/mime"
 	"github.com/alancesar/tidy-file/path"
 	"github.com/alancesar/tidy-photo/exif"
+	"github.com/manifoldco/promptui"
+	"io/ioutil"
 	"log"
 	"os"
 	"path/filepath"
 )
 
 const (
-	workdir   = ".photo-importer"
-	canonPath = "/Volumes/EOS_DIGITAL/DCIM/100CANON"
+	workdir = ".photo-importer"
 
 	_                    = iota
+	errListVolumes       = iota
+	errPromptFailed      = iota
 	errHomeDir           = iota
 	errSqlConnection     = iota
 	errStartRepository   = iota
@@ -48,7 +51,20 @@ func main() {
 		os.Exit(errStartRepository)
 	}
 
-	paths := path.LookFor(canonPath, mime.ImageType, mime.ApplicationOctetStreamType)
+	volumes := listVolumes()
+	prompt := promptui.Select{
+		Label: "Select the source device",
+		Items: volumes,
+	}
+
+	_, device, err := prompt.Run()
+	if err != nil {
+		fmt.Printf("Prompt failed %v\n", err)
+		os.Exit(errPromptFailed)
+	}
+
+	completePath := filepath.Join("/Volumes", device, "DCIM")
+	paths := path.LookFor(completePath, mime.ImageType, mime.ApplicationOctetStreamType)
 	total := len(paths)
 	directories := map[string]bool{}
 
@@ -91,6 +107,23 @@ func main() {
 		message := fmt.Sprintf("[success] %s (%d of %d)", filename, index+1, total)
 		fmt.Println(message)
 	}
+}
+
+func listVolumes() []string {
+	content, err := ioutil.ReadDir("/Volumes")
+	if err != nil {
+		log.Print(err)
+		os.Exit(errListVolumes)
+	}
+
+	var output []string
+	for _, item := range content {
+		if item.IsDir() {
+			output = append(output, item.Name())
+		}
+	}
+
+	return output
 }
 
 func calculateMD5Checksum(source string) string {
