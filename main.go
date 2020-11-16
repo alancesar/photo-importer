@@ -1,7 +1,6 @@
 package main
 
 import (
-	"crypto/md5"
 	"flag"
 	"fmt"
 	"github.com/alancesar/photo-importer/cloud"
@@ -16,6 +15,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"time"
 )
 
 const (
@@ -32,6 +32,10 @@ const (
 	errGetProviderPath  = iota
 
 	defaultPhotosPath = "Photos"
+
+	skippedLabel = "[skipped]"
+	errorLabel   = "[ error ]"
+	successLabel = "[success]"
 )
 
 var (
@@ -98,20 +102,23 @@ func main() {
 		paths <- path.LookFor(completeSourcePath, mime.ImageType, mime.ApplicationOctetStreamType)
 	}()
 
-	providerName, err := prompt.ProviderNames(cloud.Providers)
-	if err != nil {
+	var (
+		provider     cloud.Provider
+		providerName cloud.ProviderName
+		providerPath string
+	)
+
+	if providerName, err = prompt.ProviderNames(cloud.Providers); err != nil {
 		fmt.Println(err)
 		os.Exit(errPromptFailed)
 	}
 
-	provider, err := cloud.NewProvider(providerName)
-	if err != nil {
+	if provider, err = cloud.NewProvider(providerName); err != nil {
 		log.Println(err)
 		os.Exit(errInitiateProvider)
 	}
 
-	providerPath, err := provider.Location()
-	if err != nil {
+	if providerPath, err = provider.Location(); err != nil {
 		log.Println(err)
 		os.Exit(errGetProviderPath)
 	}
@@ -124,29 +131,29 @@ func main() {
 		os.Exit(errGetProviderPath)
 	}
 
-	sources := <-paths
-	total := len(sources)
-
-	for index, source := range sources {
+	total := len(<-paths)
+	for index, source := range <-paths {
 		_, filename := filepath.Split(source)
+
+		logger := func(label string) {
+			message := fmt.Sprintf("%s %s (%d of %d)", label, filename, index+1, total)
+			fmt.Println(message)
+		}
+
 		raw, err := exif.NewReader(source).Extract()
 		if err != nil {
-			message := fmt.Sprintf("[ error ] %s (%d of %d)", filename, index+1, total)
-			fmt.Println(message)
+			logger(errorLabel)
 			continue
 		}
-		checksum := fmt.Sprintf("%x", md5.Sum(raw))
+		parser := exif.NewParser(raw)
+		checksum := parser.GetChecksum()
 
-		p, err := repository.Get(filename, checksum, providerName)
-		if err != nil {
-			message := fmt.Sprintf("[ error ] %s (%d of %d)", filename, index+1, total)
-			fmt.Println(message)
+		var p photo.Photo
+		if p, err = repository.Get(filename, checksum, providerName); err != nil {
+			logger(errorLabel)
 			continue
-		}
-
-		if p.Exists() {
-			message := fmt.Sprintf("[skipped] %s (%d of %d)", filename, index+1, total)
-			fmt.Println(message)
+		} else if p.Exists() {
+			logger(skippedLabel)
 			continue
 		}
 
@@ -154,27 +161,22 @@ func main() {
 		p.Provider = providerName
 		p.Checksum = checksum
 
-		parser := exif.NewParser(raw)
-		t, err := parser.GetDateTime()
-		if err != nil {
-			message := fmt.Sprintf("[ error ] %s (%d of %d)", filename, index+1, total)
-			fmt.Println(message)
+		var t time.Time
+		if t, err = parser.GetDateTime(); err != nil {
+			logger(errorLabel)
 			continue
 		}
 
 		prefix := file.DateToPath(t)
 		destination := filepath.Join(providerPath, *photosPath, prefix, filename)
 		destination = filepath.Clean(destination)
-		duplicated, destination, err := handler.IsDuplicated(destination, checksum)
-		if err != nil {
-			message := fmt.Sprintf("[ error ] %s (%d of %d)", filename, index+1, total)
-			fmt.Println(message)
-			continue
-		}
 
-		if duplicated {
-			message := fmt.Sprintf("[skipped] %s (%d of %d)", filename, index+1, total)
-			fmt.Println(message)
+		var duplicated bool
+		if duplicated, destination, err = handler.IsDuplicated(destination, checksum); err != nil {
+			logger(errorLabel)
+			continue
+		} else if duplicated {
+			logger(skippedLabel)
 			continue
 		}
 
@@ -190,19 +192,16 @@ func main() {
 		}()
 
 		if <-copyErr != nil {
-			_ = repository.Delete(filename, checksum, providerName)
-			message := fmt.Sprintf("[ error ] %s (%d of %d)", filename, index+1, total)
-			fmt.Println(message)
+			_ = repository.Delete(p)
+			logger(errorLabel)
 			continue
 		}
 
 		if <-saveErr != nil {
-			message := fmt.Sprintf("[ error ] %s (%d of %d)", filename, index+1, total)
-			fmt.Println(message)
+			logger(errorLabel)
 			continue
 		}
 
-		message := fmt.Sprintf("[success] %s (%d of %d)", filename, index+1, total)
-		fmt.Println(message)
+		logger(successLabel)
 	}
 }
