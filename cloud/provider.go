@@ -15,7 +15,7 @@ const (
 )
 
 var (
-	Providers = []ProviderName{ICloudProviderName, OneDriveProviderName, DropboxProviderName}
+	Providers = []ProviderName{OneDriveProviderName, ICloudProviderName, DropboxProviderName}
 )
 
 func NewProvider(name ProviderName) (Provider, error) {
