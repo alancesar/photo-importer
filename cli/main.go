@@ -28,9 +28,11 @@ const (
 	errStartRepository  = iota
 	errListVolumes      = iota
 	errPromptFailed     = iota
+	errDCIMNotFound     = iota
 	errInitiateProvider = iota
 	errGetProviderPath  = iota
 
+	dcim              = "DCIM"
 	defaultPhotosPath = "Photos"
 
 	skippedLabel = "[skipped]"
@@ -91,15 +93,24 @@ func init() {
 }
 
 func main() {
-	device, err := prompt.SelectDevices(volumes)
-	if err != nil {
+	var (
+		device string
+		err    error
+	)
+
+	if device, err = prompt.SelectDevices(volumes); err != nil {
 		fmt.Printf("Prompt failed %v\n", err)
 		os.Exit(errPromptFailed)
 	}
 
+	completeSourcePath := filepath.Join(file.VolumesDir, device, dcim)
+	if completeSourcePath, err = file.FindImagesDirectory(completeSourcePath); err != nil {
+		fmt.Println(err)
+		os.Exit(errDCIMNotFound)
+	}
+
 	paths := make(chan []string)
 	go func() {
-		completeSourcePath := filepath.Join(file.VolumesDir, device, file.PhotosDir)
 		paths <- path.LookFor(completeSourcePath, mime.ImageType, mime.ApplicationOctetStreamType)
 	}()
 
