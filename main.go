@@ -103,7 +103,7 @@ func main() {
 		wg.Done()
 	}(paths, &wg)
 
-	providerName, err := prompt.ProviderName(cloud.Providers)
+	providerName, err := prompt.ProviderNames(cloud.Providers)
 	if err != nil {
 		fmt.Printf("Prompt failed %v\n", err)
 		os.Exit(errPromptFailed)

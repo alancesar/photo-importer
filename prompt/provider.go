@@ -5,7 +5,7 @@ import (
 	"github.com/manifoldco/promptui"
 )
 
-func ProviderName(availableProviders []cloud.ProviderName) (cloud.ProviderName, error) {
+func ProviderNames(availableProviders []cloud.ProviderName) (cloud.ProviderName, error) {
 	prompt := promptui.Select{
 		Label: "Select the cloud provider",
 		Items: availableProviders,
