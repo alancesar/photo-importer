@@ -64,7 +64,8 @@ func init() {
 		os.Exit(errHomeDir)
 	}
 
-	if err := os.MkdirAll(workdir, os.ModePerm); err != nil {
+	workdirPath := filepath.Join(home, workdir)
+	if err := os.MkdirAll(workdirPath, os.ModePerm); err != nil {
 		log.Println(err)
 		os.Exit(errInitiateWorkdir)
 	}
