@@ -8,7 +8,7 @@ import (
 type Repository interface {
 	Get(filename, checksum string, provider cloud.ProviderName) (Photo, error)
 	Save(photo *Photo) error
-	Delete(filename, checksum string, provider cloud.ProviderName) error
+	Delete(photo Photo) error
 }
 
 type sqlite struct {
@@ -40,9 +40,9 @@ func (s sqlite) Save(p *Photo) error {
 	return query.Error
 }
 
-func (s sqlite) Delete(filename, checksum string, provider cloud.ProviderName) error {
-	query := s.db.Delete(&Photo{}, "filename = ? AND checksum = ? AND provider = ?",
-		filename, checksum, provider)
+func (s sqlite) Delete(p Photo) error {
+	query := s.db.Delete(&p, "filename = ? AND checksum = ? AND provider = ?",
+		p.Filename, p.Checksum, p.Provider)
 
 	return query.Error
 }
