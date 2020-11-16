@@ -38,6 +38,10 @@ func FindImagesDirectory(rootPath string) (string, error) {
 	}
 
 	compile, err := regexp.Compile("\\d{3}.*")
+	if err != nil {
+		return "", err
+	}
+
 	for _, item := range content {
 		if item.IsDir() {
 			if compile.MatchString(item.Name()) {
