@@ -10,7 +10,7 @@ type ProviderName string
 
 const (
 	ICloudProviderName   ProviderName = "iCloud"
-	OneDriveProviderName ProviderName = "OneDriver"
+	OneDriveProviderName ProviderName = "OneDrive"
 	DropboxProviderName  ProviderName = "Dropbox"
 )
 
