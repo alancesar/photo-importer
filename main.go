@@ -16,7 +16,6 @@ import (
 	"log"
 	"os"
 	"path/filepath"
-	"sync"
 )
 
 const (
@@ -93,15 +92,11 @@ func main() {
 		os.Exit(errPromptFailed)
 	}
 
-	var wg sync.WaitGroup
-	wg.Add(1)
-
 	paths := make(chan []string)
-	go func(paths chan []string, group *sync.WaitGroup) {
+	go func() {
 		completeSourcePath := filepath.Join(file.VolumesDir, device, file.PhotosDir)
 		paths <- path.LookFor(completeSourcePath, mime.ImageType, mime.ApplicationOctetStreamType)
-		wg.Done()
-	}(paths, &wg)
+	}()
 
 	providerName, err := prompt.ProviderNames(cloud.Providers)
 	if err != nil {
@@ -129,10 +124,10 @@ func main() {
 		os.Exit(errGetProviderPath)
 	}
 
-	wg.Wait()
-	total := len(<-paths)
+	sources := <-paths
+	total := len(sources)
 
-	for index, source := range <-paths {
+	for index, source := range sources {
 		_, filename := filepath.Split(source)
 		raw, err := exif.NewReader(source).Extract()
 		if err != nil {
@@ -183,20 +178,16 @@ func main() {
 			continue
 		}
 
-		wg.Add(2)
 		copyErr := make(chan error)
 		saveErr := make(chan error)
 
-		go func(err chan error, wg *sync.WaitGroup) {
-			err <- command.NewExecutor(source, destination).Execute(commands...)
-			wg.Done()
-		}(copyErr, &wg)
+		go func() {
+			copyErr <- command.NewExecutor(source, destination).Execute(commands...)
+		}()
 
-		go func(err chan error, wg *sync.WaitGroup) {
-			err <- repository.Save(&p)
-		}(saveErr, &wg)
-
-		wg.Wait()
+		go func() {
+			saveErr <- repository.Save(&p)
+		}()
 
 		if <-copyErr != nil {
 			_ = repository.Delete(filename, checksum, providerName)
