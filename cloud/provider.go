@@ -14,6 +14,10 @@ const (
 	DropboxProviderName  ProviderName = "Dropbox"
 )
 
+var (
+	Providers = []ProviderName{ICloudProviderName, OneDriveProviderName, DropboxProviderName}
+)
+
 func NewProvider(name ProviderName) (Provider, error) {
 	switch name {
 	case ICloudProviderName:

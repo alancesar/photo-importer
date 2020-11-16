@@ -1,7 +1,11 @@
 github.com/alancesar/tidy-file v0.0.0-20201115041559-735a90923a15 h1:4z0FBiR81CdhuQW32F/Y/VbrUnr3u0iV0HBXBztanlg=
 github.com/alancesar/tidy-file v0.0.0-20201115041559-735a90923a15/go.mod h1:CyacnJ+PGdpyf4b/W9pVWhCXC+sDDIdaPp+Ro7Dcazs=
+github.com/alancesar/tidy-file v0.0.0-20201116014640-eb0c427f2710 h1:kf75wfUArTaxgaTRGP6D4JzTndf9uqLg53s2z4SSBYE=
+github.com/alancesar/tidy-file v0.0.0-20201116014640-eb0c427f2710/go.mod h1:CyacnJ+PGdpyf4b/W9pVWhCXC+sDDIdaPp+Ro7Dcazs=
 github.com/alancesar/tidy-photo v0.0.0-20201115043428-a16e78ad08ed h1:uEutkT5aSIYtXDARXK6b6XddnUtcKMWFl9Irchvg/r0=
 github.com/alancesar/tidy-photo v0.0.0-20201115043428-a16e78ad08ed/go.mod h1:45nOQiUWX4hbWgtqjzycIPIXOOvlJk60W6sfsihPtJ8=
+github.com/alancesar/tidy-photo v0.0.0-20201116013959-24aabb69211b h1:cCV3Ub9GoDj/35+NbRdBfsrYl/r4P5PNvvUeyIllNMk=
+github.com/alancesar/tidy-photo v0.0.0-20201116013959-24aabb69211b/go.mod h1:45nOQiUWX4hbWgtqjzycIPIXOOvlJk60W6sfsihPtJ8=
 github.com/chzyer/logex v1.1.10/go.mod h1:+Ywpsq7O8HXn0nuIou7OrIPyXbp3wmkHB+jjWRnGsAI=
 github.com/chzyer/readline v0.0.0-20180603132655-2972be24d48e h1:fY5BOSpyZCqRo5OhCuC+XN+r/bBCmeuuJtjz+bCNIf8=
 github.com/chzyer/readline v0.0.0-20180603132655-2972be24d48e/go.mod h1:nSuG5e5PlCu98SY8svDHJxuZscDgtXS6KTTbou5AhLI=

@@ -8,6 +8,7 @@ import (
 )
 
 type dropbox struct {
+	infoDataReader func() ([]byte, error)
 }
 
 type dropboxInfo struct {
@@ -16,14 +17,22 @@ type dropboxInfo struct {
 	} `json:"personal"`
 }
 
-func (dropbox) Location() (string, error) {
+func (dropbox) defaultInfoDataReader() ([]byte, error) {
 	home, err := os.UserHomeDir()
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 
 	dropboxInfoLocation := filepath.Join(home, ".dropbox", "info.json")
-	data, err := ioutil.ReadFile(dropboxInfoLocation)
+	return ioutil.ReadFile(dropboxInfoLocation)
+}
+
+func (d dropbox) Location() (string, error) {
+	if d.infoDataReader == nil {
+		d.infoDataReader = d.defaultInfoDataReader
+	}
+
+	data, err := d.infoDataReader()
 	if err != nil {
 		return "", err
 	}

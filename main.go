@@ -1,41 +1,69 @@
 package main
 
 import (
+	"crypto/md5"
+	"flag"
 	"fmt"
+	"github.com/alancesar/photo-importer/cloud"
 	"github.com/alancesar/photo-importer/database"
 	"github.com/alancesar/photo-importer/file"
-	"github.com/alancesar/photo-importer/md5"
 	"github.com/alancesar/photo-importer/photo"
+	"github.com/alancesar/photo-importer/prompt"
 	"github.com/alancesar/tidy-file/command"
 	"github.com/alancesar/tidy-file/mime"
 	"github.com/alancesar/tidy-file/path"
 	"github.com/alancesar/tidy-photo/exif"
-	"github.com/manifoldco/promptui"
-	"io/ioutil"
 	"log"
 	"os"
 	"path/filepath"
+	"sync"
 )
 
 const (
 	workdir = ".photo-importer"
 
-	_                    = iota
-	errListVolumes       = iota
-	errPromptFailed      = iota
-	errHomeDir           = iota
-	errSqlConnection     = iota
-	errStartRepository   = iota
-	errMD5Checksum       = iota
-	errGetFromRepository = iota
-	errSaveInRepository  = iota
+	_                   = iota
+	errHomeDir          = iota
+	errInitiateWorkdir  = iota
+	errSqlConnection    = iota
+	errStartRepository  = iota
+	errListVolumes      = iota
+	errPromptFailed     = iota
+	errInitiateProvider = iota
+	errGetProviderPath  = iota
+
+	defaultPhotosPath = "Photos"
 )
 
-func main() {
+var (
+	photosPath *string
+	repository photo.Repository
+	volumes    []string
+
+	commands = []command.Command{command.MkDir, command.CopyFile}
+	handler  = file.NewHandler(path.Exists, func(path string) (string, error) {
+		raw, err := exif.NewReader(path).Extract()
+		if err != nil {
+			return "", err
+		}
+
+		return exif.NewParser(raw).GetChecksum(), nil
+	})
+)
+
+func init() {
+	photosPath = flag.String("-o", defaultPhotosPath, "output photos location")
+	flag.Parse()
+
 	home, err := os.UserHomeDir()
 	if err != nil {
 		log.Print(err)
 		os.Exit(errHomeDir)
+	}
+
+	if err := os.MkdirAll(workdir, os.ModePerm); err != nil {
+		log.Print(err)
+		os.Exit(errInitiateWorkdir)
 	}
 
 	dbPath := filepath.Join(home, workdir, "photos.db")
@@ -45,129 +73,129 @@ func main() {
 		os.Exit(errSqlConnection)
 	}
 
-	repository, err := photo.NewSQLiteRepository(db)
+	repository, err = photo.NewSQLiteRepository(db)
 	if err != nil {
 		log.Print(err)
 		os.Exit(errStartRepository)
 	}
 
-	volumes := listVolumes()
-	prompt := promptui.Select{
-		Label: "Select the source device",
-		Items: volumes,
+	volumes, err = file.ListVolumes()
+	if err != nil {
+		fmt.Println(err)
+		os.Exit(errListVolumes)
 	}
+}
 
-	_, device, err := prompt.Run()
+func main() {
+	device, err := prompt.SelectDevices(volumes)
 	if err != nil {
 		fmt.Printf("Prompt failed %v\n", err)
 		os.Exit(errPromptFailed)
 	}
 
-	completePath := filepath.Join("/Volumes", device, "DCIM")
-	paths := path.LookFor(completePath, mime.ImageType, mime.ApplicationOctetStreamType)
-	total := len(paths)
-	directories := map[string]bool{}
+	var wg sync.WaitGroup
+	wg.Add(1)
 
-	for index, source := range paths {
+	paths := make(chan []string)
+	go func(paths chan []string, group *sync.WaitGroup) {
+		completeSourcePath := filepath.Join(file.VolumesDir, device, file.PhotosDir)
+		paths <- path.LookFor(completeSourcePath, mime.ImageType, mime.ApplicationOctetStreamType)
+		wg.Done()
+	}(paths, &wg)
+
+	providerName, err := prompt.ProviderName(cloud.Providers)
+	if err != nil {
+		fmt.Printf("Prompt failed %v\n", err)
+		os.Exit(errPromptFailed)
+	}
+
+	provider, err := cloud.NewProvider(providerName)
+	if err != nil {
+		log.Print(err)
+		os.Exit(errInitiateProvider)
+	}
+
+	providerPath, err := provider.Location()
+	if err != nil {
+		log.Print(err)
+		os.Exit(errGetProviderPath)
+	}
+
+	if exists, err := path.Exists(providerPath); err != nil {
+		log.Print(err)
+		os.Exit(errGetProviderPath)
+	} else if !exists {
+		log.Println(fmt.Errorf("%s directory has not been found", providerName))
+		os.Exit(errGetProviderPath)
+	}
+
+	wg.Wait()
+	total := len(<-paths)
+
+	for index, source := range <-paths {
 		_, filename := filepath.Split(source)
-		checksum := calculateMD5Checksum(source)
-		p := getFromRepository(filename, checksum, repository)
+		raw, err := exif.NewReader(source).Extract()
+		if err != nil {
+			message := fmt.Sprintf("[ error ] %s (%d of %d)", filename, index+1, total)
+			fmt.Println(message)
+			continue
+		}
+		checksum := fmt.Sprintf("%x", md5.Sum(raw))
 
-		if p.ID != 0 {
+		p, err := repository.Get(filename, checksum, providerName)
+		if err != nil {
+			message := fmt.Sprintf("[ error ] %s (%d of %d)", filename, index+1, total)
+			fmt.Println(message)
+			continue
+		}
+
+		if p.Exists() {
 			message := fmt.Sprintf("[skipped] %s (%d of %d)", filename, index+1, total)
 			fmt.Println(message)
 			continue
 		}
 
-		raw, err := exif.NewReader(source).Extract()
-		if err != nil {
-			message := fmt.Sprintf("[error ] %s (%d of %d)", filename, index+1, total)
-			fmt.Println(message)
-			continue
-		}
+		p.Filename = filename
+		p.Provider = providerName
+		p.Checksum = checksum
 
 		parser := exif.NewParser(raw)
-		destination, err := file.BuildFilename(filename, parser)
+		t, err := parser.GetDateTime()
 		if err != nil {
-			message := fmt.Sprintf("[error ] %s (%d of %d)", filename, index+1, total)
+			message := fmt.Sprintf("[ error ] %s (%d of %d)", filename, index+1, total)
 			fmt.Println(message)
 			continue
 		}
 
-		if err := copyFile(source, destination, directories); err != nil {
-			message := fmt.Sprintf("[error ] %s (%d of %d)", filename, index+1, total)
+		prefix := file.DateToPath(t)
+		destination := filepath.Join(providerPath, *photosPath, prefix, filename)
+		destination = filepath.Clean(destination)
+		duplicated, destination, err := handler.IsDuplicated(destination, checksum)
+		if err != nil {
+			message := fmt.Sprintf("[ error ] %s (%d of %d)", filename, index+1, total)
 			fmt.Println(message)
 			continue
 		}
 
-		p.Filename = filename
-		p.Checksum = checksum
-		saveInRepository(p, repository)
+		if duplicated {
+			message := fmt.Sprintf("[skipped] %s (%d of %d)", filename, index+1, total)
+			fmt.Println(message)
+			continue
+		}
+
+		if err := command.NewExecutor(source, destination).Execute(commands...); err != nil {
+			message := fmt.Sprintf("[ error ] %s (%d of %d)", filename, index+1, total)
+			fmt.Println(message)
+			continue
+		}
+
+		if err := repository.Save(&p); err != nil {
+			message := fmt.Sprintf("[ error ] %s (%d of %d)", filename, index+1, total)
+			fmt.Println(message)
+			continue
+		}
 
 		message := fmt.Sprintf("[success] %s (%d of %d)", filename, index+1, total)
 		fmt.Println(message)
 	}
-}
-
-func listVolumes() []string {
-	content, err := ioutil.ReadDir("/Volumes")
-	if err != nil {
-		log.Print(err)
-		os.Exit(errListVolumes)
-	}
-
-	var output []string
-	for _, item := range content {
-		if item.IsDir() {
-			output = append(output, item.Name())
-		}
-	}
-
-	return output
-}
-
-func calculateMD5Checksum(source string) string {
-	checksum, err := md5.CalculateMD5Checksum(source)
-	if err != nil {
-		log.Print(err)
-		os.Exit(errMD5Checksum)
-	}
-
-	return checksum
-}
-
-func getFromRepository(filename, checksum string, repository photo.Repository) photo.Photo {
-	p, err := repository.Get(filename, checksum)
-	if err != nil {
-		log.Print(err)
-		os.Exit(errGetFromRepository)
-	}
-
-	return p
-}
-
-func saveInRepository(p photo.Photo, repository photo.Repository) {
-	if err := repository.Save(&p); err != nil {
-		log.Print(err)
-		os.Exit(errSaveInRepository)
-	}
-}
-
-func copyFile(source, destination string, directories map[string]bool) error {
-	output, _ := filepath.Split(destination)
-	commands := createCommands(output, directories)
-	if err := command.NewExecutor(source, destination).Execute(commands...); err != nil {
-		return err
-	}
-	directories[output] = true
-	return nil
-}
-
-func createCommands(output string, directories map[string]bool) []command.Command {
-	var commands []command.Command
-	if _, exist := directories[output]; !exist {
-		commands = append(commands, command.MkDir)
-	}
-	commands = append(commands, command.CopyFile)
-	return commands
 }

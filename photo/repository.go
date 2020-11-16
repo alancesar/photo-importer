@@ -1,9 +1,12 @@
 package photo
 
-import "gorm.io/gorm"
+import (
+	"github.com/alancesar/photo-importer/cloud"
+	"gorm.io/gorm"
+)
 
 type Repository interface {
-	Get(filename, checksum string) (Photo, error)
+	Get(filename, checksum string, provider cloud.ProviderName) (Photo, error)
 	Save(photo *Photo) error
 }
 
@@ -19,10 +22,10 @@ func NewSQLiteRepository(db *gorm.DB) (Repository, error) {
 	return sqlite{db: db}, nil
 }
 
-func (s sqlite) Get(filename, checksum string) (Photo, error) {
+func (s sqlite) Get(filename, checksum string, provider cloud.ProviderName) (Photo, error) {
 	p := Photo{}
-	query := s.db.Where("filename = ? AND checksum = ?", filename, checksum).
-		First(&p)
+	query := s.db.Where("filename = ? AND checksum = ? AND provider = ?", filename, checksum, provider).
+		Last(&p)
 
 	if query.Error != nil && query.Error != gorm.ErrRecordNotFound {
 		return Photo{}, query.Error
