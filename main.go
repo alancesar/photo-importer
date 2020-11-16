@@ -57,25 +57,25 @@ func init() {
 
 	home, err := os.UserHomeDir()
 	if err != nil {
-		log.Print(err)
+		log.Println(err)
 		os.Exit(errHomeDir)
 	}
 
 	if err := os.MkdirAll(workdir, os.ModePerm); err != nil {
-		log.Print(err)
+		log.Println(err)
 		os.Exit(errInitiateWorkdir)
 	}
 
 	dbPath := filepath.Join(home, workdir, "photos.db")
 	db, err := database.NewSQLiteConnection(dbPath)
 	if err != nil {
-		log.Print(err)
+		log.Println(err)
 		os.Exit(errSqlConnection)
 	}
 
 	repository, err = photo.NewSQLiteRepository(db)
 	if err != nil {
-		log.Print(err)
+		log.Println(err)
 		os.Exit(errStartRepository)
 	}
 
@@ -105,24 +105,24 @@ func main() {
 
 	providerName, err := prompt.ProviderNames(cloud.Providers)
 	if err != nil {
-		fmt.Printf("Prompt failed %v\n", err)
+		fmt.Println(err)
 		os.Exit(errPromptFailed)
 	}
 
 	provider, err := cloud.NewProvider(providerName)
 	if err != nil {
-		log.Print(err)
+		log.Println(err)
 		os.Exit(errInitiateProvider)
 	}
 
 	providerPath, err := provider.Location()
 	if err != nil {
-		log.Print(err)
+		log.Println(err)
 		os.Exit(errGetProviderPath)
 	}
 
 	if exists, err := path.Exists(providerPath); err != nil {
-		log.Print(err)
+		log.Println(err)
 		os.Exit(errGetProviderPath)
 	} else if !exists {
 		log.Println(fmt.Errorf("%s directory has not been found", providerName))
