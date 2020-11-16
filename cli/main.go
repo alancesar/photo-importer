@@ -132,8 +132,9 @@ func main() {
 		os.Exit(errGetProviderPath)
 	}
 
-	total := len(<-paths)
-	for index, source := range <-paths {
+	sources := <-paths
+	total := len(sources)
+	for index, source := range sources {
 		_, filename := filepath.Split(source)
 
 		logger := func(label string) {
