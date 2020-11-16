@@ -183,13 +183,29 @@ func main() {
 			continue
 		}
 
-		if err := command.NewExecutor(source, destination).Execute(commands...); err != nil {
+		wg.Add(2)
+		copyErr := make(chan error)
+		saveErr := make(chan error)
+
+		go func(err chan error, wg *sync.WaitGroup) {
+			err <- command.NewExecutor(source, destination).Execute(commands...)
+			wg.Done()
+		}(copyErr, &wg)
+
+		go func(err chan error, wg *sync.WaitGroup) {
+			err <- repository.Save(&p)
+		}(saveErr, &wg)
+
+		wg.Wait()
+
+		if <-copyErr != nil {
+			_ = repository.Delete(filename, checksum, providerName)
 			message := fmt.Sprintf("[ error ] %s (%d of %d)", filename, index+1, total)
 			fmt.Println(message)
 			continue
 		}
 
-		if err := repository.Save(&p); err != nil {
+		if <-saveErr != nil {
 			message := fmt.Sprintf("[ error ] %s (%d of %d)", filename, index+1, total)
 			fmt.Println(message)
 			continue
