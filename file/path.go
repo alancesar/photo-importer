@@ -3,8 +3,10 @@ package file
 import (
 	"fmt"
 	"io/ioutil"
+	"os/exec"
 	"path/filepath"
 	"regexp"
+	"strings"
 )
 
 const (
@@ -51,4 +53,14 @@ func FindImagesDirectory(rootPath string) (string, error) {
 	}
 
 	return "", fmt.Errorf("DCIM directory not valid")
+}
+
+func GetDeviceUUID(device string) (string, error) {
+	cmd := fmt.Sprintf("diskutil info %s | grep UUID", device)
+	out, err := exec.Command("bash", "-c", cmd).Output()
+	if err != nil {
+		return "", err
+	}
+
+	return strings.TrimSpace(strings.Split(string(out), ":")[1:][0]), nil
 }
