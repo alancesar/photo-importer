@@ -28,6 +28,7 @@ const (
 	errStartRepository  = iota
 	errListVolumes      = iota
 	errPromptFailed     = iota
+	errGetDeviceUUID    = iota
 	errDCIMNotFound     = iota
 	errInitiateProvider = iota
 	errGetProviderPath  = iota
@@ -103,7 +104,14 @@ func main() {
 		os.Exit(errPromptFailed)
 	}
 
-	completeSourcePath := filepath.Join(file.VolumesDir, device, dcim)
+	devicePath := filepath.Join(file.VolumesDir, device)
+	deviceUUID, err := file.GetDeviceUUID(devicePath)
+	if err != nil {
+		log.Println(err)
+		os.Exit(errGetDeviceUUID)
+	}
+
+	completeSourcePath := filepath.Join(devicePath, dcim)
 	if completeSourcePath, err = file.FindImagesDirectory(completeSourcePath); err != nil {
 		fmt.Println(err)
 		os.Exit(errDCIMNotFound)
@@ -153,6 +161,15 @@ func main() {
 			fmt.Println(message)
 		}
 
+		var p photo.Photo
+		if p, err = repository.Get(filename, deviceUUID, providerName); err != nil {
+			logger(errorLabel)
+			continue
+		} else if p.Exists() {
+			logger(skippedLabel)
+			continue
+		}
+
 		raw, err := exif.NewReader(source).Extract()
 		if err != nil {
 			logger(errorLabel)
@@ -161,18 +178,10 @@ func main() {
 		parser := exif.NewParser(raw)
 		checksum := parser.GetChecksum()
 
-		var p photo.Photo
-		if p, err = repository.Get(filename, checksum, providerName); err != nil {
-			logger(errorLabel)
-			continue
-		} else if p.Exists() {
-			logger(skippedLabel)
-			continue
-		}
-
 		p.Filename = filename
 		p.Provider = providerName
 		p.Checksum = checksum
+		p.DeviceUUID = deviceUUID
 
 		var t time.Time
 		if t, err = parser.GetDateTime(); err != nil {

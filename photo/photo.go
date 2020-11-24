@@ -7,9 +7,10 @@ import (
 
 type Photo struct {
 	gorm.Model
-	Filename string
-	Checksum string
-	Provider cloud.ProviderName
+	Filename   string
+	Checksum   string
+	DeviceUUID string
+	Provider   cloud.ProviderName
 }
 
 func (p Photo) Exists() bool {

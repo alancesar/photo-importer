@@ -6,7 +6,7 @@ import (
 )
 
 type Repository interface {
-	Get(filename, checksum string, provider cloud.ProviderName) (Photo, error)
+	Get(filename, deviceUUID string, provider cloud.ProviderName) (Photo, error)
 	Save(photo *Photo) error
 	Delete(photo Photo) error
 }
@@ -23,9 +23,9 @@ func NewSQLiteRepository(db *gorm.DB) (Repository, error) {
 	return sqlite{db: db}, nil
 }
 
-func (s sqlite) Get(filename, checksum string, provider cloud.ProviderName) (Photo, error) {
+func (s sqlite) Get(filename, deviceUUID string, provider cloud.ProviderName) (Photo, error) {
 	p := Photo{}
-	query := s.db.Where("filename = ? AND checksum = ? AND provider = ?", filename, checksum, provider).
+	query := s.db.Where("filename = ? AND device_uuid = ? AND provider = ?", filename, deviceUUID, provider).
 		Last(&p)
 
 	if query.Error != nil && query.Error != gorm.ErrRecordNotFound {
